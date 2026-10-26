@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rental Repairs Estimator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Playfair+Display:ital,wght@1,600;1,700&family=DM+Sans:wght@400;500;700&display=swap">
+<style>
+  /* Layout: inputs on the left (scope sheet), a sticky running total on the right; stacks to one column on phones. */
+  :root {
+    --bg: #F7F2E7;
+    --card: #FFFFFF;
+    --sunk: #F1EADA;
+    --fg: #1B2530;
+    --muted: #5B6673;
+    --line: #E2D7BF;
+    --navy: #0B1B33;
+    --gold: #C9A45C;
+    --gold-ink: #7A5C1E;
+    --on-navy: #F7F2E7;
+    --warn-bg: #FFF4E5;
+    --warn-fg: #7A3E00;
+    --ok: #1A7D3A;
+    --f-display: "Montserrat", "Helvetica Neue", Arial, sans-serif;
+    --f-accent: "Playfair Display", Georgia, serif;
+    --f-body: "DM Sans", -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #07111F; --card: #0E1C31; --sunk: #13264A; --fg: #F4EEDF; --muted: #A9B3C2;
+      --line: #23375A; --navy: #F4EEDF; --gold: #D4B06A; --gold-ink: #E3C27E; --on-navy: #07111F;
+      --warn-bg: #3A2A12; --warn-fg: #F3D29B; --ok: #6FD18E; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #07111F; --card: #0E1C31; --sunk: #13264A; --fg: #F4EEDF; --muted: #A9B3C2;
+    --line: #23375A; --navy: #F4EEDF; --gold: #D4B06A; --gold-ink: #E3C27E; --on-navy: #07111F;
+    --warn-bg: #3A2A12; --warn-fg: #F3D29B; --ok: #6FD18E; color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 15px; line-height: 1.5;
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 28px 40px;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+
+  header { display: flex; flex-direction: column; gap: 4px; }
+  .eyebrow { font-family: var(--f-display); font-weight: 700; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--gold-ink); }
+  h1 { font-family: var(--f-display); font-weight: 800; font-size: clamp(26px, 4.4vw, 38px); line-height: 1.1; margin: 0; color: var(--navy); text-wrap: balance; }
+  h1 em { font-family: var(--f-accent); font-weight: 700; color: var(--gold-ink); }
+  header p { margin: 4px 0 0; color: var(--muted); max-width: 62ch; }
+
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 22px; align-items: start; }
+  @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } }
+
+  .sheet { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+  section.block { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+  .block-head { display: flex; align-items: baseline; gap: 10px; }
+  .step { font-family: var(--f-display); font-weight: 800; font-size: 12px; color: var(--gold-ink); letter-spacing: .06em; }
+  h2 { font-family: var(--f-display); font-weight: 700; font-size: 15px; margin: 0; color: var(--navy); }
+  .hint { font-size: 13px; color: var(--muted); margin: 0; }
+
+  .row { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; }
+  @media (max-width: 480px) { .row { grid-template-columns: 1fr; } }
+  .field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+  label, .lbl { font-size: 13px; font-weight: 700; color: var(--muted); }
+  input[type="text"], input[type="number"] {
+    width: 100%; font: inherit; font-size: 15px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 7px;
+    background: var(--card); color: var(--fg); font-variant-numeric: tabular-nums;
+  }
+  input:focus-visible, button:focus-visible, .level input:focus-visible + span { outline: 2px solid var(--gold); outline-offset: 2px; }
+  .money { position: relative; }
+  .money::before { content: "$"; position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
+  .money input { padding-left: 22px; }
+  .money input:disabled { background: var(--sunk); color: var(--muted); }
+
+  /* rehab level cards */
+  .levels { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 10px; }
+  .level { position: relative; }
+  .level input { position: absolute; opacity: 0; pointer-events: none; }
+  .level > span {
+    display: flex; flex-direction: column; gap: 4px; height: 100%; padding: 12px; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--card); cursor: pointer; transition: border-color .15s, background .15s;
+  }
+  .level b { font-family: var(--f-display); font-size: 13px; color: var(--navy); }
+  .level .rate { font-family: var(--f-display); font-weight: 800; font-size: 18px; color: var(--gold-ink); font-variant-numeric: tabular-nums; }
+  .level small { font-size: 12px; color: var(--muted); line-height: 1.35; }
+  .level input:checked + span { border-color: var(--gold); background: var(--sunk); box-shadow: inset 0 0 0 1px var(--gold); }
+
+  /* line items */
+  .items { display: flex; flex-direction: column; }
+  .item { display: grid; grid-template-columns: 22px minmax(0, 1fr) 140px; gap: 10px; align-items: center; padding: 9px 0; border-top: 1px solid var(--line); }
+  .item:first-child { border-top: none; }
+  .item input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--gold-ink); margin: 0; }
+  .item .name { display: flex; flex-direction: column; min-width: 0; }
+  .item .name b { font-size: 14px; color: var(--fg); }
+  .item .name small { font-size: 12px; color: var(--muted); }
+  .item.custom { grid-template-columns: minmax(0, 1fr) 140px 32px; }
+  .item.custom input[type="text"] { padding: 7px 9px; font-size: 14px; }
+  .del { width: 32px; height: 32px; border: 1px solid var(--line); border-radius: 7px; background: none; color: var(--muted); cursor: pointer; font-size: 16px; line-height: 1; }
+  .del:hover { color: var(--warn-fg); border-color: var(--warn-fg); }
+  @media (max-width: 480px) { .item { grid-template-columns: 22px minmax(0, 1fr) 112px; } .item.custom { grid-template-columns: minmax(0, 1fr) 112px 32px; } }
+  .add { align-self: flex-start; font: inherit; font-size: 13px; font-weight: 700; color: var(--gold-ink); background: none; border: 1px dashed var(--gold); border-radius: 7px; padding: 8px 12px; cursor: pointer; }
+  .add:hover { background: var(--sunk); }
+
+  .contingency { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .contingency input[type="range"] { flex: 1; min-width: 160px; accent-color: var(--gold-ink); }
+  .contingency output { font-family: var(--f-display); font-weight: 800; font-size: 18px; color: var(--navy); min-width: 52px; font-variant-numeric: tabular-nums; }
+
+  /* totals */
+  aside.total { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); background: var(--navy); color: var(--on-navy); border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+  @media (max-width: 860px) { aside.total { position: static; } }
+  aside .eyebrow { color: var(--gold); }
+  .big { font-family: var(--f-display); font-weight: 800; font-size: 40px; line-height: 1; font-variant-numeric: tabular-nums; }
+  .per { font-size: 13px; opacity: .8; }
+  .lines { display: flex; flex-direction: column; gap: 7px; padding-top: 12px; border-top: 1px solid color-mix(in srgb, var(--on-navy) 22%, transparent); }
+  .line { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; }
+  .line span:first-child { opacity: .8; min-width: 0; }
+  .line span:last-child { font-variant-numeric: tabular-nums; font-weight: 700; }
+  .line.sub { padding-top: 7px; border-top: 1px dashed color-mix(in srgb, var(--on-navy) 22%, transparent); }
+  .copy { font: inherit; font-weight: 700; font-size: 14px; padding: 12px; border: none; border-radius: 8px; background: var(--gold); color: #0B1B33; cursor: pointer; }
+  .copy:hover { filter: brightness(1.05); }
+  .copy-status { font-size: 12px; opacity: .85; min-height: 1.2em; margin: -6px 0 0; }
+  textarea.fallback { width: 100%; min-height: 120px; font: 12px/1.4 ui-monospace, Menlo, monospace; border-radius: 7px; border: none; padding: 8px; }
+
+  .warn { background: var(--warn-bg); color: var(--warn-fg); border-radius: 8px; padding: 10px 12px; font-size: 13px; }
+  .foot { font-size: 12px; color: var(--muted); max-width: 80ch; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">Crash to Cash · Rental Portfolio</span>
+    <h1>Rental Repairs <em>Estimator</em></h1>
+    <p>Get a ballpark rehab budget before you make an offer. Pick the rehab level, check the big-ticket items, add a cushion for surprises. The sample numbers below are an example; replace them with your property.</p>
+  </header>
+
+  <div class="layout">
+    <form class="sheet" id="sheet" novalidate>
+
+      <section class="block">
+        <div class="block-head"><span class="step">STEP 1</span><h2>The property</h2></div>
+        <div class="row">
+          <div class="field">
+            <label for="addr">Address or nickname</label>
+            <input type="text" id="addr" value="Example: 1418 Oak St">
+          </div>
+          <div class="field">
+            <label for="sqft">Square feet</label>
+            <input type="number" id="sqft" value="1400" min="0" step="50" inputmode="numeric">
+          </div>
+        </div>
+      </section>
+
+      <section class="block">
+        <div class="block-head"><span class="step">STEP 2</span><h2>Rehab level</h2></div>
+        <p class="hint">How much work does it take to get rent-ready? Priced per square foot.</p>
+        <div class="levels" role="radiogroup" aria-label="Rehab level">
+          <label class="level"><input type="radio" name="level" value="5" data-name="Rent-ready touch-up"><span><b>Rent-ready</b><span class="rate">$5/sqft</span><small>Paint touch-ups, deep clean, small fixes.</small></span></label>
+          <label class="level"><input type="radio" name="level" value="15" data-name="Light"><span><b>Light</b><span class="rate">$15/sqft</span><small>Paint, flooring, fixtures, cleaning.</small></span></label>
+          <label class="level"><input type="radio" name="level" value="25" data-name="Medium" checked><span><b>Medium</b><span class="rate">$25/sqft</span><small>Light, plus kitchen and baths.</small></span></label>
+          <label class="level"><input type="radio" name="level" value="35" data-name="Heavy"><span><b>Heavy</b><span class="rate">$35/sqft</span><small>Medium, plus plumbing, electrical or layout.</small></span></label>
+          <label class="level"><input type="radio" name="level" value="45" data-name="Heavy + exterior"><span><b>Heavy + exterior</b><span class="rate">$45/sqft</span><small>Heavy, plus siding, windows, exterior fixes.</small></span></label>
+        </div>
+      </section>
+
+      <section class="block">
+        <div class="block-head"><span class="step">STEP 3</span><h2>Big-ticket items</h2></div>
+        <p class="hint">The per-sqft rates don't cover these. Check anything that needs work. Roof and HVAC fill in a rough starting number from the square footage; swap in a real quote as soon as you have one.</p>
+        <div class="items" id="items"></div>
+        <button type="button" class="add" id="addItem">+ Add a line item</button>
+      </section>
+
+      <section class="block">
+        <div class="block-head"><span class="step">STEP 4</span><h2>Contingency</h2></div>
+        <p class="hint">Something always comes up once the walls are open. 10–15% is a common cushion; go higher on older homes.</p>
+        <div class="contingency">
+          <input type="range" id="cont" min="0" max="30" step="1" value="10" aria-label="Contingency percent">
+          <output id="contOut" for="cont">10%</output>
+        </div>
+      </section>
+    </form>
+
+    <aside class="total" aria-live="polite">
+      <span class="eyebrow" id="tAddr">Estimated repairs</span>
+      <div>
+        <div class="big" id="tTotal">$0</div>
+        <div class="per" id="tPer"></div>
+      </div>
+      <div class="lines" id="tLines"></div>
+      <div id="tWarn"></div>
+      <button type="button" class="copy" id="copyBtn">Copy estimate</button>
+      <p class="copy-status" id="copyStatus">Copies the breakdown so you can paste it into your notes or a text to your contractor.</p>
+    </aside>
+  </div>
+
+  <p class="foot">Ballpark estimates only. Costs vary by market, contractor and what you find inside the walls. Get real bids before you close. Education only; not financial, legal or tax advice.</p>
+</div>
+
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  const fmt = n => '$' + Math.round(Math.max(0, n)).toLocaleString('en-US');
+  const num = el => { const v = parseFloat(el.value); return isFinite(v) && v > 0 ? v : 0; };
+
+  // Same starting formulas as the Offer Calculator: base for ~1,600 sqft, plus a step per extra 500 sqft
+  const roofCost = s => s <= 1600 ? 7000 : 7000 + Math.ceil((s - 1600) / 500) * 1500;
+  const hvacCost = s => s <= 1600 ? 7500 : 7500 + Math.ceil((s - 1600) / 500) * 2500;
+
+  const FIXED = [
+    { key: 'roof', name: 'Roof', note: 'Starting number from sqft', auto: roofCost, checked: true },
+    { key: 'hvac', name: 'AC / HVAC', note: 'Starting number from sqft', auto: hvacCost },
+    { key: 'foundation', name: 'Foundation', note: 'Varies too much for a formula; enter a quote' },
+    { key: 'water', name: 'Water heater', note: 'Enter your quote' },
+    { key: 'panel', name: 'Electrical panel', note: 'Enter your quote' },
+    { key: 'sewer', name: 'Sewer line / main plumbing', note: 'Enter your quote' }
+  ];
+
+  const itemsEl = $('items');
+  FIXED.forEach(it => {
+    const row = document.createElement('div');
+    row.className = 'item';
+    row.innerHTML =
+      `<input type="checkbox" id="chk-${it.key}" aria-label="${it.name} needs work">` +
+      `<label class="name" for="chk-${it.key}"><b>${it.name}</b><small>${it.note}</small></label>` +
+      `<div class="money"><input type="number" id="amt-${it.key}" min="0" step="250" value="0" disabled aria-label="${it.name} cost"></div>`;
+    itemsEl.appendChild(row);
+    const chk = row.querySelector('input[type=checkbox]');
+    const amt = row.querySelector('input[type=number]');
+    it.chk = chk; it.amt = amt; it.edited = false;
+    chk.addEventListener('change', () => {
+      amt.disabled = !chk.checked;
+      if (chk.checked) { amt.value = it.auto ? it.auto(num($('sqft'))) : ''; it.edited = false; if (!it.auto) amt.focus(); }
+      else { amt.value = 0; }
+      calc();
+    });
+    amt.addEventListener('input', () => { it.edited = true; calc(); });
+    if (it.checked) { chk.checked = true; amt.disabled = false; amt.value = it.auto(num($('sqft'))); }
+  });
+
+  let customN = 0;
+  function addCustom(name, cost) {
+    customN++;
+    const row = document.createElement('div');
+    row.className = 'item custom';
+    row.innerHTML =
+      `<input type="text" id="cname-${customN}" placeholder="e.g. Fence, appliances, windows" aria-label="Line item name">` +
+      `<div class="money"><input type="number" id="ccost-${customN}" min="0" step="100" placeholder="0" aria-label="Line item cost"></div>` +
+      `<button type="button" class="del" aria-label="Remove line item">×</button>`;
+    row.querySelector('input[type=text]').value = name || '';
+    if (cost) row.querySelector('input[type=number]').value = cost;
+    row.querySelector('.del').addEventListener('click', () => { row.remove(); calc(); });
+    row.querySelectorAll('input').forEach(i => i.addEventListener('input', calc));
+    itemsEl.appendChild(row);
+    return row;
+  }
+  $('addItem').addEventListener('click', () => { addCustom().querySelector('input[type=text]').focus(); });
+  addCustom('Example: appliance package', 3200);
+
+  $('sqft').addEventListener('input', () => {
+    const s = num($('sqft'));
+    FIXED.forEach(it => { if (it.auto && it.chk.checked && !it.edited) it.amt.value = it.auto(s); });
+    calc();
+  });
+  $('addr').addEventListener('input', calc);
+  document.querySelectorAll('input[name=level]').forEach(r => r.addEventListener('change', calc));
+  $('cont').addEventListener('input', calc);
+  $('sheet').addEventListener('submit', e => e.preventDefault());
+
+  let latest = null;
+
+  function calc() {
+    const sqft = num($('sqft'));
+    const lvl = document.querySelector('input[name=level]:checked');
+    const rate = lvl ? parseFloat(lvl.value) : 0;
+    const levelName = lvl ? lvl.dataset.name : '';
+    const base = sqft * rate;
+
+    const big = [];
+    FIXED.forEach(it => { if (it.chk.checked) big.push({ name: it.name, cost: num(it.amt) }); });
+    itemsEl.querySelectorAll('.item.custom').forEach(row => {
+      const n = row.querySelector('input[type=text]').value.trim();
+      const c = num(row.querySelector('input[type=number]'));
+      if (n || c) big.push({ name: n || 'Other', cost: c });
+    });
+    const bigTotal = big.reduce((a, b) => a + b.cost, 0);
+
+    const pct = parseFloat($('cont').value) || 0;
+    $('contOut').textContent = pct + '%';
+    const subtotal = base + bigTotal;
+    const cont = subtotal * pct / 100;
+    const total = subtotal + cont;
+
+    const addr = $('addr').value.trim();
+    $('tAddr').textContent = addr ? 'Estimated repairs · ' + addr : 'Estimated repairs';
+    $('tTotal').textContent = fmt(total);
+    $('tPer').textContent = sqft ? `About ${fmt(total / sqft)} per sqft across ${sqft.toLocaleString('en-US')} sqft` : 'Enter square feet to price the rehab.';
+
+    const lines = [[`${levelName} rehab (${fmt(rate)}/sqft)`, base]];
+    big.forEach(b => lines.push([b.name, b.cost]));
+    let html = lines.map(([n, v]) => `<div class="line"><span>${esc(n)}</span><span>${fmt(v)}</span></div>`).join('');
+    html += `<div class="line sub"><span>Subtotal</span><span>${fmt(subtotal)}</span></div>`;
+    html += `<div class="line"><span>Contingency (${pct}%)</span><span>${fmt(cont)}</span></div>`;
+    $('tLines').innerHTML = html;
+
+    const missing = FIXED.filter(it => it.chk.checked && !num(it.amt)).map(it => it.name);
+    $('tWarn').innerHTML = missing.length ? `<div class="warn">${esc(missing.join(', '))} ${missing.length > 1 ? 'are' : 'is'} checked with no cost yet.</div>` : '';
+
+    latest = { addr, sqft, levelName, rate, base, big, subtotal, pct, cont, total };
+  }
+
+  function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+  function report() {
+    const c = latest;
+    const out = [
+      `Repairs estimate${c.addr ? ' — ' + c.addr : ''}`,
+      `${c.sqft.toLocaleString('en-US')} sqft · ${c.levelName} rehab at ${fmt(c.rate)}/sqft: ${fmt(c.base)}`
+    ];
+    c.big.forEach(b => out.push(`${b.name}: ${fmt(b.cost)}`));
+    out.push(`Subtotal: ${fmt(c.subtotal)}`, `Contingency (${c.pct}%): ${fmt(c.cont)}`, `TOTAL: ${fmt(c.total)}`, '', 'Ballpark only. Get real bids before closing.');
+    return out.join('\n');
+  }
+
+  $('copyBtn').addEventListener('click', () => {
+    const text = report();
+    const status = $('copyStatus');
+    const fallback = () => {
+      status.textContent = 'Your browser blocked copying. Select the text below and copy it.';
+      let ta = document.querySelector('textarea.fallback');
+      if (!ta) { ta = document.createElement('textarea'); ta.className = 'fallback'; ta.readOnly = true; status.after(ta); }
+      ta.value = text; ta.focus(); ta.select();
+    };
+    try {
+      navigator.clipboard.writeText(text).then(() => { status.textContent = 'Copied. Paste it wherever you need it.'; }, fallback);
+    } catch (e) { fallback(); }
+  });
+
+  calc();
+})();
+</script>
+
+</body>
+</html>
